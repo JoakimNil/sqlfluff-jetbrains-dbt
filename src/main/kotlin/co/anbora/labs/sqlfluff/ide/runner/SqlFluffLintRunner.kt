@@ -4,12 +4,14 @@ import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.ProcessOutput
 import com.intellij.openapi.diagnostic.Logger
+import java.io.File
+import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 object SqlFluffLintRunner {
 
-    data class Param(val execPath: String = "", val extraArgs: List<String> = listOf())
+    data class Param(val execPath: String = "", val extraArgs: List<String> = listOf(), val tmpFile: File? = null)
 
     private val log: Logger = Logger.getInstance(SqlFluffLintRunner::class.java)
 
@@ -24,6 +26,7 @@ object SqlFluffLintRunner {
         val result = Result()
         try {
             val out: ProcessOutput = lint(projectPath, params)
+            log.info("SqlFluffLintRunner:24 - Got sqlfluff output: $out")
             result.errorOutput = out.stderr
             try {
                 if (isOkExecution(out)) {
@@ -68,7 +71,17 @@ object SqlFluffLintRunner {
             commandLine.addParameter(it)
         }
 
-        return CommandLineRunner.execute(commandLine, TIME_OUT)
+        val output = CommandLineRunner.execute(commandLine, TIME_OUT)
+
+        // we sometimes create tmp files in project dir, and if it exists,
+        // make sure to delete it as soon as linting is completed.
+        if (params.tmpFile != null) {
+            try {
+                params.tmpFile.delete()
+            // Ignore IOException: if the file is already deleted, it doesn't matter
+            } catch (_: IOException) {}
+        }
+        return output
     }
 
 }
